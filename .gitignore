@@ -1,0 +1,7 @@
+# Node
+node_modules/
+
+# Optional
+coverage/
+*.log
+npm-debug.log*
