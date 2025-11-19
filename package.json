@@ -1,0 +1,14 @@
+{
+  "name": "dashboard-sim",
+  "version": "1.0.0",
+  "description": "Bug fix evaluation",
+  "main": "input.js",
+  "scripts": {
+    "test": "jest --detectOpenHandles --runInBand"
+  },
+  "author": "",
+  "license": "MIT",
+  "devDependencies": {
+    "jest": "28.1.1"
+  }
+}
