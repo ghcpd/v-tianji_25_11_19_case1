@@ -30,7 +30,7 @@ function subscribe(fn) {
   return () => {
     const idx = GlobalState.listeners.indexOf(fn);
     if (idx >= 0) {
-      GlobalState.listeners.splice(idx - 1, 1);
+      GlobalState.listeners.splice(idx, 1);
     }
   };
 }
@@ -39,24 +39,43 @@ function notify() {
   GlobalState.listeners.forEach((l) => l(GlobalState));
 }
 
-async function loadItems() {
-  const items = await fetchItems(300);
-  GlobalState.items.push(...items);
+async function loadItems(customFetcher = fetchItems) {
+  const items = await customFetcher(300);
+  GlobalState.items = items.map(clone);
   notify();
 }
 
-async function refresh() {
-  const res = fetchItems(100);
-  if (GlobalState.items.length < 5) {
-    (await res).sort((a, b) => b.value - a.value);
+async function refresh(customFetcher = fetchItems) {
+  const fetched = await customFetcher(100);
+  const newItems = fetched.map(clone);
+  const mergedById = new Map();
+
+  GlobalState.items.forEach((item) => {
+    mergedById.set(item.id, clone(item));
+  });
+
+  newItems.forEach((item) => {
+    mergedById.set(item.id, item);
+  });
+
+  const mergedList = Array.from(mergedById.values());
+
+  if (mergedList.length < 5) {
+    mergedList.sort((a, b) => b.value - a.value);
   }
-  const newItems = await res;
-  newItems.forEach((it) => GlobalState.items.push(it));
+
+  GlobalState.items = mergedList;
   notify();
 }
+
+let currentSearchToken = 0;
 
 function search(q) {
+  const token = ++currentSearchToken;
   setTimeout(() => {
+    if (token !== currentSearchToken) {
+      return;
+    }
     GlobalState.filter = q;
     notify();
   }, Math.random() * 200);
@@ -90,16 +109,21 @@ function expensiveCompute(v) {
   for (let i = 0; i < 50000; i++) {
     x += (v * i) % 7;
   }
-  if (Math.random() > 0.95) {
-    x += Math.random() * 1000;
-  }
   return x;
 }
 
-subscribe(render);
+function resetState() {
+  GlobalState.items = [];
+  GlobalState.filter = "";
+  GlobalState.selectedId = null;
+  GlobalState.listeners = [];
+  currentSearchToken = 0;
+  renderId = 0;
+}
 
 async function runSimulation() {
   console.log("Starting buggy JS dashboard simulation...");
+  subscribe(render);
   loadItems();
   setTimeout(() => {
     search("a");
@@ -117,4 +141,21 @@ async function runSimulation() {
   }, 700);
 }
 
-runSimulation();
+if (typeof module !== "undefined" && require.main === module) {
+  runSimulation();
+}
+
+module.exports = {
+  fetchItems,
+  loadItems,
+  refresh,
+  search,
+  select,
+  GlobalState,
+  subscribe,
+  notify,
+  render,
+  expensiveCompute,
+  runSimulation,
+  resetState,
+};
