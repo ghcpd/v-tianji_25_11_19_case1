@@ -30,40 +30,64 @@ function subscribe(fn) {
   return () => {
     const idx = GlobalState.listeners.indexOf(fn);
     if (idx >= 0) {
-      GlobalState.listeners.splice(idx - 1, 1);
+      // remove the listener at the found index
+      GlobalState.listeners.splice(idx, 1);
     }
   };
 }
 
 function notify() {
-  GlobalState.listeners.forEach((l) => l(GlobalState));
+  // provide a shallow snapshot of state to prevent listeners mutating global state
+  const snapshot = { ...GlobalState, items: GlobalState.items.slice() };
+  GlobalState.listeners.forEach((l) => {
+    try {
+      l(snapshot);
+    } catch (err) {
+      console.error("Listener error:", err);
+    }
+  });
 }
 
 async function loadItems() {
   const items = await fetchItems(300);
-  GlobalState.items.push(...items);
+  // avoid duplicating by id
+  for (const it of items) {
+    if (!GlobalState.items.find((i) => i.id === it.id)) {
+      GlobalState.items.push(it);
+    }
+  }
   notify();
 }
 
 async function refresh() {
-  const res = fetchItems(100);
+  const newItems = await fetchItems(100);
   if (GlobalState.items.length < 5) {
-    (await res).sort((a, b) => b.value - a.value);
+    newItems.sort((a, b) => b.value - a.value);
   }
-  const newItems = await res;
-  newItems.forEach((it) => GlobalState.items.push(it));
+  // merge without duplicates
+  for (const it of newItems) {
+    if (!GlobalState.items.find((i) => i.id === it.id)) {
+      GlobalState.items.push(it);
+    }
+  }
   notify();
 }
 
 function search(q) {
-  setTimeout(() => {
-    GlobalState.filter = q;
-    notify();
-  }, Math.random() * 200);
+  // return a promise so callers can await
+  return new Promise((resolve) => {
+    setTimeout(() => {
+      GlobalState.filter = q;
+      notify();
+      resolve(q);
+    }, Math.random() * 200);
+  });
 }
 
 function select(id) {
-  GlobalState.selectedId = id;
+  // ensure id is present; otherwise clear selection
+  const found = GlobalState.items.find((i) => i.id === id);
+  GlobalState.selectedId = found ? id : null;
   notify();
 }
 
@@ -99,8 +123,8 @@ function expensiveCompute(v) {
 subscribe(render);
 
 async function runSimulation() {
-  console.log("Starting buggy JS dashboard simulation...");
-  loadItems();
+  console.log("Starting JS dashboard simulation...");
+  await loadItems();
   setTimeout(() => {
     search("a");
   }, 500);
@@ -117,4 +141,21 @@ async function runSimulation() {
   }, 700);
 }
 
-runSimulation();
+if (typeof module !== 'undefined' && module.exports) {
+  module.exports = {
+    fetchItems,
+    clone,
+    GlobalState,
+    subscribe,
+    notify,
+    loadItems,
+    refresh,
+    search,
+    select,
+    render,
+    expensiveCompute,
+    runSimulation,
+  };
+} else {
+  runSimulation();
+}
